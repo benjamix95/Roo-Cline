@@ -63,6 +63,8 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 		setMode,
     experimentalDiffStrategy,
 		setExperimentalDiffStrategy,
+		isFlutterProject,
+		setIsFlutterProject,
 	} = useExtensionState()
 	const [apiErrorMessage, setApiErrorMessage] = useState<string | undefined>(undefined)
 	const [modelIdErrorMessage, setModelIdErrorMessage] = useState<string | undefined>(undefined)
@@ -105,7 +107,8 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 				apiConfiguration
 			})
 			vscode.postMessage({ type: "mode", text: mode })
-      vscode.postMessage({ type: "experimentalDiffStrategy", bool: experimentalDiffStrategy })
+			   vscode.postMessage({ type: "experimentalDiffStrategy", bool: experimentalDiffStrategy })
+			   vscode.postMessage({ type: "isFlutterProject", bool: isFlutterProject })
 			onDone()
 		}
 	}
@@ -278,6 +281,21 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 							color: "var(--vscode-descriptionForeground)",
 						}}>
 							Select the language that Cline should use for communication.
+						</p>
+					</div>
+
+					<div style={{ marginBottom: 15 }}>
+						<VSCodeCheckbox
+							checked={isFlutterProject}
+							onChange={(e: any) => setIsFlutterProject(e.target.checked)}>
+							<span style={{ fontWeight: "500" }}>Enable Flutter Support</span>
+						</VSCodeCheckbox>
+						<p style={{
+							fontSize: "12px",
+							marginTop: "5px",
+							color: "var(--vscode-descriptionForeground)",
+						}}>
+							When enabled, Cline will detect Flutter projects and optimize its suggestions accordingly.
 						</p>
 					</div>
 

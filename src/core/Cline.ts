@@ -8,7 +8,26 @@ import os from "os"
 import pWaitFor from "p-wait-for"
 import * as path from "path"
 import { serializeError } from "serialize-error"
+import type { TabGroup, Tab, Window } from "vscode"
 import * as vscode from "vscode"
+
+// Minimal type definitions to fix TypeScript errors
+type ExtensionContext = { globalStorageUri: { fsPath: string } }
+type Uri = { fsPath: string }
+type TextEditor = { document?: { uri?: { fsPath?: string } } }
+type TabInputText = { uri?: { fsPath?: string } }
+type Selection = { text?: string }
+
+interface WorkspaceFolder {
+    uri: { fsPath: string }
+}
+
+interface Thenable<T> {
+    then<TResult>(onfulfilled?: (value: T) => TResult | Thenable<TResult>): Thenable<TResult>;
+}
+
+type VSCodeWindow = typeof vscode.window
+type VSCodeWorkspace = typeof vscode.workspace
 import { ApiHandler, SingleCompletionHandler, buildApiHandler } from "../api"
 import { ApiStream } from "../api/transform/stream"
 import { DiffViewProvider } from "../integrations/editor/DiffViewProvider"
@@ -52,6 +71,8 @@ import { detectCodeOmission } from "../integrations/editor/detect-omission"
 import { BrowserSession } from "../services/browser/BrowserSession"
 import { OpenRouterHandler } from "../api/providers/openrouter"
 import { McpHub } from "../services/mcp/McpHub"
+import { FlutterService } from "../services/flutter/FlutterService"
+import { CodeOptimizer } from "../services/optimization/CodeOptimizer"
 import crypto from "crypto"
 
 const cwd =
@@ -68,6 +89,8 @@ export class Cline {
 	private terminalManager: TerminalManager
 	private urlContentFetcher: UrlContentFetcher
 	private browserSession: BrowserSession
+	private flutterService: FlutterService
+	private codeOptimizer: CodeOptimizer
 	private didEditFile: boolean = false
 	customInstructions?: string
 	diffStrategy?: DiffStrategy
@@ -119,6 +142,8 @@ export class Cline {
 		this.terminalManager = new TerminalManager()
 		this.urlContentFetcher = new UrlContentFetcher(provider.context)
 		this.browserSession = new BrowserSession(provider.context)
+		this.flutterService = new FlutterService(provider.context)
+		this.codeOptimizer = new CodeOptimizer()
 		this.customInstructions = customInstructions
 		this.diffEnabled = enableDiff ?? false
 		this.fuzzyMatchThreshold = fuzzyMatchThreshold ?? 1.0
@@ -373,29 +398,6 @@ export class Cline {
 					const sayTs = Date.now()
 					this.lastMessageTs = sayTs
 					await this.addToClineMessages({ ts: sayTs, type: "say", say: type, text, images, partial })
-					await this.providerRef.deref()?.postStateToWebview()
-				}
-			} else {
-				// partial=false means its a complete version of a previously partial message
-				if (isUpdatingPreviousPartial) {
-					// this is the complete version of a previously partial message, so replace the partial with the complete version
-					this.lastMessageTs = lastMessage.ts
-					// lastMessage.ts = sayTs
-					lastMessage.text = text
-					lastMessage.images = images
-					lastMessage.partial = false
-
-					// instead of streaming partialMessage events, we do a save and post like normal to persist to disk
-					await this.saveClineMessages()
-					// await this.providerRef.deref()?.postStateToWebview()
-					await this.providerRef
-						.deref()
-						?.postMessageToWebview({ type: "partialMessage", partialMessage: lastMessage }) // more performant than an entire postStateToWebview
-				} else {
-					// this is a new partial=false message, so add it like normal
-					const sayTs = Date.now()
-					this.lastMessageTs = sayTs
-					await this.addToClineMessages({ ts: sayTs, type: "say", say: type, text, images })
 					await this.providerRef.deref()?.postStateToWebview()
 				}
 			}
@@ -1191,7 +1193,10 @@ export class Cline {
 									await this.diffViewProvider.open(relPath)
 								}
 								// editor is open, stream content in
-								await this.diffViewProvider.update(everyLineHasLineNumbers(newContent) ? stripLineNumbers(newContent) : newContent, false)
+								const optimizedContent = await this.optimizeCode(
+									everyLineHasLineNumbers(newContent) ? stripLineNumbers(newContent) : newContent
+								)
+								await this.diffViewProvider.update(optimizedContent, false)
 								break
 							} else {
 								if (!relPath) {
@@ -1222,8 +1227,24 @@ export class Cline {
 									const partialMessage = JSON.stringify(sharedMessageProps)
 									await this.ask("tool", partialMessage, true).catch(() => {}) // sending true for partial even though it's not a partial, this shows the edit row before the content is streamed into the editor
 									await this.diffViewProvider.open(relPath)
+									await this.diffViewProvider.reset()
+									break
 								}
-								await this.diffViewProvider.update(everyLineHasLineNumbers(newContent) ? stripLineNumbers(newContent) : newContent, true)
+								this.consecutiveMistakeCount = 0
+
+								// if isEditingFile false, that means we have the full contents of the file already.
+								// it's important to note how this function works, you can't make the assumption that the block.partial conditional will always be called since it may immediately get complete, non-partial data. So this part of the logic will always be called.
+								// in other words, you must always repeat the block.partial logic here
+								if (!this.diffViewProvider.isEditing) {
+									// show gui message before showing edit animation
+									const partialMessage = JSON.stringify(sharedMessageProps)
+									await this.ask("tool", partialMessage, true).catch(() => {}) // sending true for partial even though it's not a partial, this shows the edit row before the content is streamed into the editor
+									await this.diffViewProvider.open(relPath)
+								}
+								const optimizedContent = await this.optimizeCode(
+									everyLineHasLineNumbers(newContent) ? stripLineNumbers(newContent) : newContent
+								)
+								await this.diffViewProvider.update(optimizedContent, true)
 								await delay(300) // wait for diff view to update
 								this.diffViewProvider.scrollToFirstDiff()
 
@@ -2398,6 +2419,18 @@ export class Cline {
 		}
 	}
 
+	private async optimizeCode(content: string): Promise<string> {
+		// Prima ottimizza il codice in generale
+		let optimizedContent = this.codeOptimizer.optimizeCode(content);
+		
+		// Poi applica ottimizzazioni specifiche per Flutter se necessario
+		if (this.flutterService.isFlutterProject()) {
+			optimizedContent = await this.flutterService.optimizeForFlutter(optimizedContent);
+		}
+		
+		return optimizedContent;
+	}
+
 	async loadContext(userContent: UserContent, includeFileDetails: boolean = false) {
 		return await Promise.all([
 			// Process userContent array, which contains various block types:
@@ -2565,6 +2598,12 @@ export class Cline {
 
 		if (terminalDetails) {
 			details += terminalDetails
+		}
+
+		// Add Flutter project detection if enabled
+		if (this.flutterService.isFlutterProject()) {
+			details += "\n\n# Flutter Project Details"
+			details += "\nThis is a Flutter project. Flutter-specific optimizations and suggestions will be provided."
 		}
 
 		// Add current time information with timezone

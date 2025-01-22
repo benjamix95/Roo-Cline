@@ -72,7 +72,8 @@ export interface WebviewMessage {
 		| "getSystemPrompt"
 		| "systemPrompt"
 		| "enhancementApiConfigId"
-    	| "experimentalDiffStrategy"
+		  	| "experimentalDiffStrategy"
+		| "isFlutterProject"
 		| "autoApprovalEnabled"
 	text?: string
 	disabled?: boolean

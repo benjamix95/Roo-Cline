@@ -95,8 +95,9 @@ export interface ExtensionState {
 	modeApiConfigs?: Record<Mode, string>
 	enhancementApiConfigId?: string
   	experimentalDiffStrategy?: boolean
-	autoApprovalEnabled?: boolean
-}
+  	autoApprovalEnabled?: boolean
+  	isFlutterProject?: boolean
+  }
 
 export interface ClineMessage {
 	ts: number

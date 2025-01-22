@@ -13,3 +13,15 @@
 # Adding a New Setting
 
 To add a new setting that persists its state, follow the steps in cline_docs/settings.md
+
+3. Code Optimization:
+   - Before making any code changes, always analyze the code to understand its performance and identify areas of improvement
+   - When making changes, focus on fixing bugs and optimizing performance only
+   - Avoid making unnecessary code changes or adding new features without explicit user approval
+   - When adding new features, ensure they are thoroughly tested and optimized for performance
+
+4. Flutter Support:
+   - In the settings, add a feature to detect if the user is developing a Flutter app/tool
+   - If the user selects the Flutter option, use the Flutter SDK to create the app/tool
+   - Optimize the app/tool for Flutter performance
+   - Add a checkbox to the UI, next to the profile, to allow the user to select/deselect the Flutter option

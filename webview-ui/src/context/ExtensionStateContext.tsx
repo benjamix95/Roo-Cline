@@ -67,6 +67,8 @@ export interface ExtensionStateContextType extends ExtensionState {
 	setExperimentalDiffStrategy: (value: boolean) => void
 	autoApprovalEnabled?: boolean
 	setAutoApprovalEnabled: (value: boolean) => void
+	isFlutterProject?: boolean
+	setIsFlutterProject: (value: boolean) => void
 }
 
 export const ExtensionStateContext = createContext<ExtensionStateContextType | undefined>(undefined)
@@ -97,6 +99,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		enhancementApiConfigId: '',
 		experimentalDiffStrategy: false,
 		autoApprovalEnabled: false,
+		isFlutterProject: false,
 	})
 	const [didHydrateState, setDidHydrateState] = useState(false)
 	const [showWelcome, setShowWelcome] = useState(false)
@@ -247,6 +250,7 @@ export const ExtensionStateContextProvider: React.FC<{ children: React.ReactNode
 		setEnhancementApiConfigId: (value) => setState((prevState) => ({ ...prevState, enhancementApiConfigId: value })),
 		setExperimentalDiffStrategy: (value) => setState((prevState) => ({ ...prevState, experimentalDiffStrategy: value })),
 		setAutoApprovalEnabled: (value) => setState((prevState) => ({ ...prevState, autoApprovalEnabled: value })),
+		setIsFlutterProject: (value) => setState((prevState) => ({ ...prevState, isFlutterProject: value })),
 	}
 
 	return <ExtensionStateContext.Provider value={contextValue}>{children}</ExtensionStateContext.Provider>
